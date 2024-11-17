@@ -1,59 +1,78 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
-import { collection, addDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 
 function App() {
-  const [user, setUser] = useState(null);
   const [movimientos, setMovimientos] = useState([]);
   const [fecha, setFecha] = useState('');
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
   const [tipo, setTipo] = useState('ingreso');
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(setUser);
-    return unsubscribe;
+    const unsubAuth = auth.onAuthStateChanged((user) => {
+      setUser(user);
+      setLoading(false);
+    });
+
+    return () => unsubAuth();
   }, []);
 
   useEffect(() => {
     if (!user) return;
 
-    const q = query(
-      collection(db, `users/${user.uid}/movimientos`),
-      orderBy('fecha', 'desc')
-    );
-
+    const q = query(collection(db, `users/${user.uid}/movimientos`), orderBy('fecha', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMovimientos(docs);
+      const nuevosMovimientos = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMovimientos(nuevosMovimientos);
     });
 
-    return unsubscribe;
+    return () => unsubscribe();
   }, [user]);
 
   const login = async () => {
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      const result = await signInWithPopup(auth, provider);
+      console.log("Login exitoso:", result.user);
     } catch (error) {
       console.error('Error en login:', error);
-      alert('Error al iniciar sesión: ' + error.message);
+      if (error.code === 'auth/unauthorized-domain') {
+        alert('Error: Este dominio no está autorizado. Por favor, contacta al administrador.');
+      } else {
+        alert('Error al iniciar sesión: ' + error.message);
+      }
     }
   };
 
   const logout = async () => {
     try {
       await signOut(auth);
-      setUser(null);
     } catch (error) {
-      console.error('Error en logout:', error);
+      alert('Error al cerrar sesión: ' + error.message);
     }
   };
 
   const agregarMovimiento = async (e) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      alert('Debes iniciar sesión para agregar movimientos');
+      return;
+    }
+
+    if (!fecha || !concepto || !monto) {
+      alert('Por favor, completa todos los campos');
+      return;
+    }
 
     try {
       await addDoc(collection(db, `users/${user.uid}/movimientos`), {
@@ -64,16 +83,18 @@ function App() {
         createdAt: new Date()
       });
 
-      // Limpiar el formulario
       setFecha('');
       setConcepto('');
       setMonto('');
-      
+      alert('Movimiento agregado exitosamente');
     } catch (error) {
-      console.error('Error al agregar:', error);
-      alert('Error al agregar movimiento');
+      alert('Error al agregar movimiento: ' + error.message);
     }
   };
+
+  if (loading) {
+    return <div>Cargando...</div>;
+  }
 
   if (!user) {
     return (
