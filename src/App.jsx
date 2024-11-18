@@ -32,25 +32,30 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
-    const q = query(collection(db, 'shared_movements'), orderBy('date', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newMovements = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setMovements(newMovements);
-    });
+    try {
+      const q = query(collection(db, 'movements'), orderBy('date', 'desc'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const newMovements = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('Loaded movements:', newMovements);
+        setMovements(newMovements);
+      }, (error) => {
+        console.error("Error in snapshot listener:", error);
+      });
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    } catch (error) {
+      console.error("Error setting up listener:", error);
+    }
   }, [user]);
 
   const login = async () => {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({
-        prompt: 'select_account',
-        access_type: 'offline',
-        include_granted_scopes: true
+        prompt: 'select_account'
       });
       const auth = getAuth();
       await setPersistence(auth, browserLocalPersistence);
@@ -88,7 +93,15 @@ function App() {
     }
 
     try {
-      await addDoc(collection(db, 'shared_movements'), {
+      console.log('Adding movement:', {
+        date,
+        concept,
+        amount: parseFloat(amount),
+        type,
+        userEmail: user.email
+      });
+
+      const docRef = await addDoc(collection(db, 'movements'), {
         date,
         concept,
         amount: parseFloat(amount),
@@ -98,11 +111,12 @@ function App() {
         userEmail: user.email
       });
 
+      console.log('Document written with ID:', docRef.id);
       setDate('');
       setConcept('');
       setAmount('');
     } catch (error) {
-      console.error('Error adding movement:', error);
+      console.error('Full error:', error);
       alert('Error adding movement: ' + error.message);
     }
   };
@@ -111,7 +125,7 @@ function App() {
     if (!window.confirm('Are you sure you want to delete this movement?')) return;
     
     try {
-      await deleteDoc(doc(db, 'shared_movements', id));
+      await deleteDoc(doc(db, 'movements', id));
     } catch (error) {
       alert('Error deleting movement: ' + error.message);
     }
