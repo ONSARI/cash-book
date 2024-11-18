@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
-import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut, 
+  getAuth, 
+  setPersistence, 
+  browserLocalPersistence 
+} from 'firebase/auth';
 import { Download, Trash2, LogOut } from 'lucide-react';
 
 function App() {
@@ -25,7 +32,6 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
-    // Aquí está el cambio principal: ahora usamos una colección compartida
     const q = query(collection(db, 'movements'), orderBy('date', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const newMovements = snapshot.docs.map(doc => ({
@@ -42,8 +48,12 @@ function App() {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({
-        prompt: 'select_account'
+        prompt: 'select_account',
+        access_type: 'offline',
+        include_granted_scopes: true
       });
+      const auth = getAuth();
+      await setPersistence(auth, browserLocalPersistence);
       const result = await signInWithPopup(auth, provider);
       console.log("Login successful:", result.user);
     } catch (error) {
@@ -59,6 +69,7 @@ function App() {
   const logout = async () => {
     try {
       await signOut(auth);
+      setUser(null);
     } catch (error) {
       alert('Logout error: ' + error.message);
     }
@@ -77,7 +88,6 @@ function App() {
     }
 
     try {
-      // Aquí guardamos también quién creó el movimiento
       await addDoc(collection(db, 'movements'), {
         date,
         concept,
@@ -92,6 +102,7 @@ function App() {
       setConcept('');
       setAmount('');
     } catch (error) {
+      console.error('Error adding movement:', error);
       alert('Error adding movement: ' + error.message);
     }
   };
@@ -100,7 +111,6 @@ function App() {
     if (!window.confirm('Are you sure you want to delete this movement?')) return;
     
     try {
-      // Actualizado para usar la colección compartida
       await deleteDoc(doc(db, 'movements', id));
     } catch (error) {
       alert('Error deleting movement: ' + error.message);
@@ -295,16 +305,14 @@ function App() {
               <td colSpan="2" className="px-6 py-4 text-right font-medium">Totals:</td>
               <td className="px-6 py-4 text-right text-green-600 font-medium">${income.toFixed(2)}</td>
               <td className="px-6 py-4 text-right text-red-600 font-medium">${expenses.toFixed(2)}</td>
-              <td className="px-6 py-4"></td>
-              <td className="px-6 py-4"></td>
+              <td colSpan="2"></td>
             </tr>
             <tr>
               <td colSpan="2" className="px-6 py-4 text-right font-medium">Balance:</td>
               <td colSpan="2" className="px-6 py-4 text-right font-bold text-blue-600">
                 ${balance.toFixed(2)}
               </td>
-              <td className="px-6 py-4"></td>
-              <td className="px-6 py-4"></td>
+              <td colSpan="2"></td>
             </tr>
           </tfoot>
         </table>
