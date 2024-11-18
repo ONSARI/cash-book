@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { Download, Trash2, LogOut } from 'lucide-react';
 
@@ -25,7 +25,8 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
-    const q = query(collection(db, `users/${user.uid}/movements`), orderBy('date', 'desc'));
+    // Aquí está el cambio principal: ahora usamos una colección compartida
+    const q = query(collection(db, 'movements'), orderBy('date', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const newMovements = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -76,12 +77,15 @@ function App() {
     }
 
     try {
-      await addDoc(collection(db, `users/${user.uid}/movements`), {
+      // Aquí guardamos también quién creó el movimiento
+      await addDoc(collection(db, 'movements'), {
         date,
         concept,
         amount: parseFloat(amount),
         type,
-        createdAt: new Date()
+        createdAt: new Date(),
+        userId: user.uid,
+        userEmail: user.email
       });
 
       setDate('');
@@ -96,7 +100,8 @@ function App() {
     if (!window.confirm('Are you sure you want to delete this movement?')) return;
     
     try {
-      await deleteDoc(doc(db, `users/${user.uid}/movements/${id}`));
+      // Actualizado para usar la colección compartida
+      await deleteDoc(doc(db, 'movements', id));
     } catch (error) {
       alert('Error deleting movement: ' + error.message);
     }
@@ -113,15 +118,16 @@ function App() {
   const exportToCSV = () => {
     const { income, expenses, balance } = calculateTotals();
     const csvContent = [
-      ['Date', 'Concept', 'Income', 'Expense', 'Balance'],
+      ['Date', 'Concept', 'Income', 'Expense', 'Added By', 'Balance'],
       ...movements.map(mov => [
         mov.date,
         mov.concept,
         mov.type === 'income' ? mov.amount.toFixed(2) : '',
         mov.type === 'expense' ? mov.amount.toFixed(2) : '',
+        mov.userEmail || 'Unknown',
         ''
       ]),
-      ['TOTALS', '', income.toFixed(2), expenses.toFixed(2), balance.toFixed(2)]
+      ['TOTALS', '', income.toFixed(2), expenses.toFixed(2), '', balance.toFixed(2)]
     ].map(row => row.join(',')).join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -255,7 +261,8 @@ function App() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Concept</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Income</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Expense</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Added By</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -269,7 +276,10 @@ function App() {
                 <td className="px-6 py-4 whitespace-nowrap text-right text-red-600">
                   {mov.type === 'expense' ? `$${mov.amount.toFixed(2)}` : ''}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {mov.userEmail || 'Unknown'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center">
                   <button
                     onClick={() => deleteMovement(mov.id)}
                     className="text-red-600 hover:text-red-900"
@@ -285,14 +295,16 @@ function App() {
               <td colSpan="2" className="px-6 py-4 text-right font-medium">Totals:</td>
               <td className="px-6 py-4 text-right text-green-600 font-medium">${income.toFixed(2)}</td>
               <td className="px-6 py-4 text-right text-red-600 font-medium">${expenses.toFixed(2)}</td>
-              <td></td>
+              <td className="px-6 py-4"></td>
+              <td className="px-6 py-4"></td>
             </tr>
             <tr>
               <td colSpan="2" className="px-6 py-4 text-right font-medium">Balance:</td>
               <td colSpan="2" className="px-6 py-4 text-right font-bold text-blue-600">
                 ${balance.toFixed(2)}
               </td>
-              <td></td>
+              <td className="px-6 py-4"></td>
+              <td className="px-6 py-4"></td>
             </tr>
           </tfoot>
         </table>
