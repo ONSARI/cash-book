@@ -32,7 +32,7 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
-    const q = query(collection(db, 'movements'), orderBy('date', 'desc'));
+    const q = query(collection(db, 'shared_movements'), orderBy('date', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const newMovements = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -88,7 +88,7 @@ function App() {
     }
 
     try {
-      await addDoc(collection(db, 'movements'), {
+      await addDoc(collection(db, 'shared_movements'), {
         date,
         concept,
         amount: parseFloat(amount),
@@ -111,7 +111,7 @@ function App() {
     if (!window.confirm('Are you sure you want to delete this movement?')) return;
     
     try {
-      await deleteDoc(doc(db, 'movements', id));
+      await deleteDoc(doc(db, 'shared_movements', id));
     } catch (error) {
       alert('Error deleting movement: ' + error.message);
     }
